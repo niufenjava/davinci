@@ -102,7 +102,7 @@ public class DownloadController extends BaseController {
             is = new FileInputStream(new File(record.getPath()));
             Streams.copy(is, response.getOutputStream(), true);
         } catch (Exception e) {
-            log.error("getDownloadRecordFile error,id=" + id + ",e=", e);
+            log.error("GetDownloadRecordFile error, id=" + id, e);
         } finally {
             FileUtils.closeCloseable(is);
         }
@@ -131,6 +131,7 @@ public class DownloadController extends BaseController {
                                                   @RequestParam(required = false) String password,
                                                   @PathVariable(name = "uuid") String uuid,
                                                   @PathVariable(name = "type") String type,
+                                                  @ApiIgnore @CurrentUser User user,
                                                   @Valid @RequestBody(required = false) DownloadViewExecuteParam[] params) {
 
         List<DownloadViewExecuteParam> downloadViewExecuteParams = Arrays.asList(params);
@@ -154,7 +155,7 @@ public class DownloadController extends BaseController {
             is = new FileInputStream(new File(record.getPath()));
             Streams.copy(is, response.getOutputStream(), true);
         } catch (Exception e) {
-            log.error("getShareDownloadRecordFile error,id=" + id + ",e=", e);
+            log.error("GetShareDownloadRecordFile error, id=" + id, e);
         } finally {
             FileUtils.closeCloseable(is);
         }

@@ -19,10 +19,30 @@
 
 package edp.core.common.jdbc;
 
-import static com.alibaba.druid.pool.DruidDataSourceFactory.*;
-import static edp.core.consts.Consts.JDBC_DATASOURCE_DEFAULT_VERSION;
+import com.alibaba.druid.filter.Filter;
+import com.alibaba.druid.pool.DruidDataSource;
+import com.alibaba.druid.util.StringUtils;
+import com.alibaba.druid.wall.WallConfig;
+import com.alibaba.druid.wall.WallFilter;
+import edp.core.consts.Consts;
+import edp.core.enums.DataTypeEnum;
+import edp.core.exception.SourceException;
+import edp.core.model.Dict;
+import edp.core.model.JdbcSourceInfo;
+import edp.core.utils.CollectionUtils;
+import edp.core.utils.CustomDataSourceUtils;
+import edp.core.utils.SourceUtils;
+import edp.davinci.core.enums.SourceTypeEnum;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.DependsOn;
+import org.springframework.stereotype.Component;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,118 +50,48 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
-import com.alibaba.druid.pool.DruidDataSource;
-import com.alibaba.druid.pool.ElasticSearchDruidDataSourceFactory;
-import com.alibaba.druid.util.StringUtils;
-
-import edp.core.consts.Consts;
-import edp.core.enums.DataTypeEnum;
-import edp.core.exception.SourceException;
-import edp.core.model.JdbcSourceInfo;
-import edp.core.utils.CollectionUtils;
-import edp.core.utils.CustomDataSourceUtils;
-import edp.core.utils.SourceUtils;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
+import static edp.core.consts.Consts.JDBC_DATASOURCE_DEFAULT_VERSION;
 
 @Slf4j
 @Component
 public class JdbcDataSource {
+
+    @Bean(name = "wallConfig")
+    WallConfig wallConfig() {
+        WallConfig config = new WallConfig();
+        config.setDeleteAllow(false);
+        config.setUpdateAllow(false);
+        config.setInsertAllow(false);
+        config.setReplaceAllow(false);
+        config.setMergeAllow(false);
+        config.setTruncateAllow(false);
+        config.setCreateTableAllow(false);
+        config.setAlterTableAllow(false);
+        config.setDropTableAllow(false);
+        config.setCommentAllow(true);
+        config.setUseAllow(false);
+        config.setDescribeAllow(false);
+        config.setShowAllow(false);
+        config.setSelectWhereAlwayTrueCheck(false);
+        config.setSelectHavingAlwayTrueCheck(false);
+        config.setSelectUnionCheck(false);
+        config.setConditionDoubleConstAllow(true);
+        config.setConditionAndAlwayTrueAllow(true);
+        config.setConditionAndAlwayFalseAllow(true);
+        return config;
+    }
+
+    @Bean(name = "wallFilter")
+    @DependsOn("wallConfig")
+    WallFilter wallFilter(WallConfig wallConfig) {
+        WallFilter wfilter = new WallFilter();
+        wfilter.setConfig(wallConfig);
+        return wfilter;
+    }
+
+    @Autowired
+    WallFilter wallFilter;
 	
-	@Component
-	private class ESDataSource extends JdbcDataSource {
-		
-		public DruidDataSource getDataSource(JdbcSourceInfo jdbcSourceInfo) throws SourceException {
-	        
-			String jdbcUrl = jdbcSourceInfo.getJdbcUrl();
-	        String username = jdbcSourceInfo.getUsername();
-	        String password = jdbcSourceInfo.getPassword();
-	        
-	        String key = getDataSourceKey(jdbcSourceInfo);
-
-			DruidDataSource druidDataSource = dataSourceMap.get(key);
-			if (druidDataSource != null && !druidDataSource.isClosed()) {
-				return druidDataSource;
-			}
-
-	        Lock lock = getDataSourceLock(key);
-
-            try {
-                if (!lock.tryLock(60L, TimeUnit.SECONDS)) {
-                    druidDataSource = dataSourceMap.get(key);
-                    if (druidDataSource != null && !druidDataSource.isClosed()) {
-                        return druidDataSource;
-                    }
-                    throw new SourceException("Unable to get datasource for jdbcUrl: " + jdbcUrl);
-                }
-            }
-            catch (InterruptedException e) {
-                throw new SourceException("Unable to get datasource for jdbcUrl: " + jdbcUrl);
-            }
-
-            druidDataSource = dataSourceMap.get(key);
-            if (druidDataSource != null && !druidDataSource.isClosed()) {
-                lock.unlock();
-                return druidDataSource;
-            }
-	        
-	        druidDataSource = dataSourceMap.get(key);
-			if (druidDataSource != null && !druidDataSource.isClosed()) {
-				return druidDataSource;
-			}
-	        
-            Properties properties = new Properties();
-            properties.setProperty(PROP_URL, jdbcUrl.trim());
-            if (!StringUtils.isEmpty(username)) {
-                properties.setProperty(PROP_USERNAME, username);
-            }
-            
-            if (!StringUtils.isEmpty(password)) {
-                properties.setProperty(PROP_PASSWORD, password);
-            }
-            
-            properties.setProperty(PROP_MAXACTIVE, String.valueOf(maxActive));
-            properties.setProperty(PROP_INITIALSIZE, String.valueOf(initialSize));
-            properties.setProperty(PROP_MINIDLE, String.valueOf(minIdle));
-            properties.setProperty(PROP_MAXWAIT, String.valueOf(maxWait));
-            properties.setProperty(PROP_TIMEBETWEENEVICTIONRUNSMILLIS, String.valueOf(timeBetweenEvictionRunsMillis));
-            properties.setProperty(PROP_MINEVICTABLEIDLETIMEMILLIS, String.valueOf(minEvictableIdleTimeMillis));
-            properties.setProperty(PROP_MAXOPENPREPAREDSTATEMENTS, String.valueOf(maxEvictableIdleTimeMillis));
-            properties.setProperty(PROP_TESTWHILEIDLE, String.valueOf(testWhileIdle));
-            properties.setProperty(PROP_TESTONBORROW, String.valueOf(testOnBorrow));
-            properties.setProperty(PROP_TESTONRETURN, String.valueOf(testOnReturn));
-            properties.setProperty(PROP_VALIDATIONQUERY, validationQuery);
-            properties.setProperty(PROP_VALIDATIONQUERY_TIMEOUT, String.valueOf(validationQueryTimeout));
-            properties.setProperty(PROP_REMOVEABANDONED, "true");
-            properties.setProperty(PROP_REMOVEABANDONEDTIMEOUT, "3900");
-            properties.setProperty(PROP_LOGABANDONED, "true");
-            properties.put(PROP_CONNECTIONPROPERTIES, "client.transport.ignore_cluster_name=true");
-
-            if (!CollectionUtils.isEmpty(jdbcSourceInfo.getProperties())) {
-                jdbcSourceInfo.getProperties().forEach(dict -> properties.setProperty(dict.getKey(), dict.getValue()));
-            }
-
-            try {
-            	druidDataSource = (DruidDataSource)ElasticSearchDruidDataSourceFactory.createDataSource(properties);
-            	dataSourceMap.put(key, druidDataSource);
-            } catch (Exception e) {
-                log.error("Exception during pool initialization", e);
-                throw new SourceException(e.getMessage());
-            }finally {
-                lock.unlock();
-            }
-
-            return druidDataSource;
-	    }
-	}
-	
-	@Autowired
-	private ESDataSource esDataSource;
-
     @Value("${source.max-active:8}")
     @Getter
     protected int maxActive;
@@ -169,6 +119,10 @@ public class JdbcDataSource {
     @Value("${source.max-evictable-idle-time-millis}")
     @Getter
     protected long maxEvictableIdleTimeMillis;
+
+    @Value("${source.time-between-connect-error-millis}")
+    @Getter
+    protected long timeBetweenConnectErrorMillis;
 
     @Value("${source.test-while-idle}")
     @Getter
@@ -259,16 +213,14 @@ public class JdbcDataSource {
 
     public DruidDataSource getDataSource(JdbcSourceInfo jdbcSourceInfo) throws SourceException {
 
-    	boolean ext = jdbcSourceInfo.isExt();
-    	if (jdbcSourceInfo.getJdbcUrl().toLowerCase().contains(DataTypeEnum.ELASTICSEARCH.getDesc().toLowerCase()) && !ext) {
-            return esDataSource.getDataSource(jdbcSourceInfo);
-        }
-        
+        String name = jdbcSourceInfo.getName();
+        String type = jdbcSourceInfo.getType();
         String jdbcUrl = jdbcSourceInfo.getJdbcUrl();
         String username = jdbcSourceInfo.getUsername();
         String password = jdbcSourceInfo.getPassword();
         String dbVersion = jdbcSourceInfo.getDbVersion();
-        
+        boolean ext = jdbcSourceInfo.isExt();
+
         String key = getDataSourceKey(jdbcSourceInfo);
 
 		DruidDataSource druidDataSource = dataSourceMap.get(key);
@@ -319,6 +271,7 @@ public class JdbcDataSource {
             	druidDataSource.setDriverClassLoader(ExtendedJdbcClassLoader.getExtJdbcClassLoader(path));
             }
 
+            druidDataSource.setName(name);
             druidDataSource.setUrl(jdbcUrl);
             druidDataSource.setUsername(username);
 
@@ -333,6 +286,7 @@ public class JdbcDataSource {
             druidDataSource.setTimeBetweenEvictionRunsMillis(timeBetweenEvictionRunsMillis);
             druidDataSource.setMinEvictableIdleTimeMillis(minEvictableIdleTimeMillis);
             druidDataSource.setMaxEvictableIdleTimeMillis(maxEvictableIdleTimeMillis);
+            druidDataSource.setTimeBetweenConnectErrorMillis(timeBetweenConnectErrorMillis);
             druidDataSource.setTestWhileIdle(testWhileIdle);
             druidDataSource.setTestOnBorrow(testOnBorrow);
             druidDataSource.setTestOnReturn(testOnReturn);
@@ -356,13 +310,64 @@ public class JdbcDataSource {
                 druidDataSource.setValidationQuery("select 1 from dual");
             }
 
-            if (!CollectionUtils.isEmpty(jdbcSourceInfo.getProperties())) {
-                Properties properties = new Properties();
-                jdbcSourceInfo.getProperties().forEach(dict -> properties.setProperty(dict.getKey(), dict.getValue()));
-                druidDataSource.setConnectProperties(properties);
+            if (driverName.indexOf("elasticsearch") != -1) {
+                druidDataSource.setValidationQuery(null);
             }
 
+            // druid wall filter not support some database so set type mysql
+            if (DataTypeEnum.MOONBOX == DataTypeEnum.urlOf(jdbcUrl) ||
+                    DataTypeEnum.MONGODB == DataTypeEnum.urlOf(jdbcUrl) ||
+                    DataTypeEnum.ELASTICSEARCH == DataTypeEnum.urlOf(jdbcUrl) ||
+                    DataTypeEnum.CASSANDRA == DataTypeEnum.urlOf(jdbcUrl) ||
+                    DataTypeEnum.VERTICA == DataTypeEnum.urlOf(jdbcUrl) ||
+                    DataTypeEnum.KYLIN == DataTypeEnum.urlOf(jdbcUrl) ||
+                    DataTypeEnum.HANA == DataTypeEnum.urlOf(jdbcUrl) ||
+                    DataTypeEnum.IMPALA == DataTypeEnum.urlOf(jdbcUrl) ||
+                    DataTypeEnum.TDENGINE == DataTypeEnum.urlOf(jdbcUrl)) {
+                wallFilter.setDbType(DataTypeEnum.MYSQL.getFeature());
+            }
+
+            Properties properties = new Properties();
+            if (driverName.indexOf("mysql") != -1) {
+                properties.setProperty("druid.mysql.usePingMethod", "false");
+            }
+
+            if (!CollectionUtils.isEmpty(jdbcSourceInfo.getProperties())) {
+                for (Dict dict : jdbcSourceInfo.getProperties()) {
+
+                    if ("davinci.db-type".equalsIgnoreCase(dict.getKey())) {
+                        wallFilter.setDbType(dict.getValue());
+                        continue;
+                    }
+
+                    if ("davinci.initial-size".equalsIgnoreCase(dict.getKey())) {
+                        druidDataSource.setInitialSize(Integer.parseInt(dict.getValue()));
+                        continue;
+                    }
+
+                    if ("davinci.min-idle".equalsIgnoreCase(dict.getKey())) {
+                        druidDataSource.setMinIdle(Integer.parseInt(dict.getValue()));
+                        continue;
+                    }
+
+                    if ("davinci.max-active".equalsIgnoreCase(dict.getKey())) {
+                        druidDataSource.setMaxActive(Integer.parseInt(dict.getValue()));
+                        continue;
+                    }
+
+                    properties.setProperty(dict.getKey(), dict.getValue());
+                }
+            }
+
+            druidDataSource.setConnectProperties(properties);
+
             try {
+
+                // davinci's statistic source & csv source don't need wall filter
+                if (!"statistic".equals(name) && SourceTypeEnum.JDBC.getType().equalsIgnoreCase(type)) {
+                    druidDataSource.setProxyFilters(Arrays.asList(new Filter[]{wallFilter}));
+                }
+
                 druidDataSource.setFilters(filters);
                 druidDataSource.init();
             } catch (Exception e) {
@@ -380,7 +385,8 @@ public class JdbcDataSource {
     }
     
     private String getDataSourceKey (JdbcSourceInfo jdbcSourceInfo) {
-        return SourceUtils.getKey(jdbcSourceInfo.getJdbcUrl(),
+        return SourceUtils.getKey(jdbcSourceInfo.getName(),
+                jdbcSourceInfo.getJdbcUrl(),
                 jdbcSourceInfo.getUsername(),
                 jdbcSourceInfo.getPassword(),
                 jdbcSourceInfo.getDbVersion(),

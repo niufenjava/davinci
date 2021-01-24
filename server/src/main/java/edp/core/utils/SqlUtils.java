@@ -31,6 +31,7 @@ import edp.davinci.core.enums.LogNameEnum;
 import edp.davinci.core.enums.SqlColumnEnum;
 import edp.davinci.core.utils.SourcePasswordEncryptUtils;
 import edp.davinci.core.utils.SqlParseUtils;
+import edp.davinci.model.Source;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.jsqlparser.JSQLParserException;
@@ -44,8 +45,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.CachePut;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.annotation.Scope;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -93,11 +92,20 @@ public class SqlUtils {
 
     private SourceUtils sourceUtils;
 
-    public SqlUtils init(BaseSource source) {
+    private static String sqlTempDelimiter;
+
+    @Value("${sql-template-delimiter:$}")
+    public void setSqlTempDelimiter(String delimiter) {
+        this.sqlTempDelimiter = delimiter;
+    }
+
+    public SqlUtils init(Source source) {
         // Password decryption
         String decrypt = SourcePasswordEncryptUtils.decrypt(source.getPassword());
         return SqlUtilsBuilder
                 .getBuilder()
+                .withName(source.getId() + AT_SYMBOL + source.getName())
+                .withType(source.getType())
                 .withJdbcUrl(source.getJdbcUrl())
                 .withUsername(source.getUsername())
                 .withPassword(decrypt)
@@ -110,11 +118,13 @@ public class SqlUtils {
                 .build();
     }
 
-    public SqlUtils init(String jdbcUrl, String username, String password, String dbVersion, List<Dict> properties, boolean ext) {
+    public SqlUtils init(String name, String type, String jdbcUrl, String username, String password, String dbVersion, List<Dict> properties, boolean ext) {
         // Password decryption
         String decrypt = SourcePasswordEncryptUtils.decrypt(password);
         return SqlUtilsBuilder
                 .getBuilder()
+                .withName(name)
+                .withType(type)
                 .withJdbcUrl(jdbcUrl)
                 .withUsername(username)
                 .withPassword(decrypt)
@@ -137,12 +147,11 @@ public class SqlUtils {
         try {
             jdbcTemplate().execute(sql);
         } catch (Exception e) {
-            log.error(e.getMessage(), e);
+            log.error(e.toString(), e);
             throw new ServerException(e.getMessage());
         }
     }
 
-    @Cacheable(value = "query", keyGenerator = "keyGenerator", sync = true)
     public PaginateWithQueryColumns syncQuery4Paginate(String sql, Integer pageNo, Integer pageSize, Integer totalCount, Integer limit, Set<String> excludeColumns) throws Exception {
         if (null == pageNo || pageNo < 1) {
             pageNo = 0;
@@ -160,12 +169,11 @@ public class SqlUtils {
         return paginate;
     }
 
-    @CachePut(value = "query", key = "#sql")
-    public List<Map<String, Object>> query4List(String sql, int limit) throws Exception {
+    public List<Map<String, Object>> query4List(String sql, int limit) {
         sql = filterAnnotate(sql);
         checkSensitiveSql(sql);
         JdbcTemplate jdbcTemplate = jdbcTemplate();
-        jdbcTemplate.setMaxRows(limit > resultLimit ? resultLimit : limit);
+        jdbcTemplate.setMaxRows(limit > resultLimit ? resultLimit : limit > 0 ? limit : resultLimit);
 
         long before = System.currentTimeMillis();
 
@@ -173,14 +181,13 @@ public class SqlUtils {
 
         if (isQueryLogEnable) {
             String md5 = MD5Util.getMD5(sql, true, 16);
-            sqlLogger.info("{} query for({} ms) total count: {} sql:{}", md5, System.currentTimeMillis() - before, list.size(), formatSql(sql));
+            sqlLogger.info("{} query for {} ms, total count:{} sql:{}", md5, System.currentTimeMillis() - before, list.size(), formatSql(sql));
         }
 
         return list;
     }
 
-    @CachePut(value = "query", keyGenerator = "keyGenerator")
-    public PaginateWithQueryColumns query4Paginate(String sql, int pageNo, int pageSize, int totalCount, int limit, Set<String> excludeColumns) throws Exception {
+    public PaginateWithQueryColumns query4Paginate(String sql, int pageNo, int pageSize, int totalCount, int limit, Set<String> excludeColumns) {
         PaginateWithQueryColumns paginateWithQueryColumns = new PaginateWithQueryColumns();
         sql = filterAnnotate(sql);
         checkSensitiveSql(sql);
@@ -240,7 +247,7 @@ public class SqlUtils {
 
         if (isQueryLogEnable) {
             String md5 = MD5Util.getMD5(sql + pageNo + pageSize + limit, true, 16);
-            sqlLogger.info("{} query for({} ms) total count: {}, page size: {}, sql:{}",
+            sqlLogger.info("{} query for {} ms, total count:{}, page size:{}, sql:{}",
                     md5, System.currentTimeMillis() - before,
                     paginateWithQueryColumns.getTotalCount(),
                     paginateWithQueryColumns.getPageSize(),
@@ -335,14 +342,14 @@ public class SqlUtils {
     }
 
     public static Set<String> getQueryFromsAndJoins(String sql) {
-        Set<String> columnPrefixs = new HashSet<>();
+        Set<String> columnPrefixes = new HashSet<>();
         try {
             Statement parse = CCJSqlParserUtil.parse(sql);
             Select select = (Select) parse;
             SelectBody selectBody = select.getSelectBody();
             if (selectBody instanceof PlainSelect) {
                 PlainSelect plainSelect = (PlainSelect) selectBody;
-                columnPrefixExtractor(columnPrefixs, plainSelect);
+                columnPrefixExtractor(columnPrefixes, plainSelect);
             }
 
             if (selectBody instanceof SetOperationList) {
@@ -350,42 +357,42 @@ public class SqlUtils {
                 List<SelectBody> selects = setOperationList.getSelects();
                 for (SelectBody optSelectBody : selects) {
                     PlainSelect plainSelect = (PlainSelect) optSelectBody;
-                    columnPrefixExtractor(columnPrefixs, plainSelect);
+                    columnPrefixExtractor(columnPrefixes, plainSelect);
                 }
             }
 
             if (selectBody instanceof WithItem) {
                 WithItem withItem = (WithItem) selectBody;
                 PlainSelect plainSelect = (PlainSelect) withItem.getSelectBody();
-                columnPrefixExtractor(columnPrefixs, plainSelect);
+                columnPrefixExtractor(columnPrefixes, plainSelect);
             }
         } catch (JSQLParserException e) {
             log.debug(e.getMessage(), e);
         }
-        return columnPrefixs;
+        return columnPrefixes;
     }
 
-    private static void columnPrefixExtractor(Set<String> columnPrefixs, PlainSelect plainSelect) {
-        getFromItemName(columnPrefixs, plainSelect.getFromItem());
+    private static void columnPrefixExtractor(Set<String> columnPrefixes, PlainSelect plainSelect) {
+        getFromItemName(columnPrefixes, plainSelect.getFromItem());
         List<Join> joins = plainSelect.getJoins();
         if (!CollectionUtils.isEmpty(joins)) {
-            joins.forEach(join -> getFromItemName(columnPrefixs, join.getRightItem()));
+            joins.forEach(join -> getFromItemName(columnPrefixes, join.getRightItem()));
         }
     }
 
-    private static void getFromItemName(Set<String> columnPrefixs, FromItem fromItem) {
+    private static void getFromItemName(Set<String> columnPrefixes, FromItem fromItem) {
         if (fromItem == null) {
             return;
         }
         Alias alias = fromItem.getAlias();
         if (alias != null) {
             if (alias.isUseAs()) {
-                columnPrefixs.add(alias.getName().trim() + DOT);
+                columnPrefixes.add(alias.getName().trim() + DOT);
             } else {
-                columnPrefixs.add(alias.toString().trim() + DOT);
+                columnPrefixes.add(alias.toString().trim() + DOT);
             }
         } else {
-            fromItem.accept(getFromItemTableName(columnPrefixs));
+            fromItem.accept(getFromItemTableName(columnPrefixes));
         }
     }
 
@@ -447,7 +454,7 @@ public class SqlUtils {
             }
 
         } catch (Exception e) {
-            log.error(e.getMessage(), e);
+            log.error(e.toString(), e);
             return dbList;
         } finally {
             SourceUtils.releaseConnection(connection);
@@ -616,7 +623,7 @@ public class SqlUtils {
                 primaryKeys.add(rs.getString("COLUMN_NAME"));
             }
         } catch (Exception e) {
-            log.error(e.getMessage(), e);
+            log.error(e.toString(), e);
         } finally {
             SourceUtils.closeResult(rs);
         }
@@ -647,7 +654,7 @@ public class SqlUtils {
                 columnList.add(new QueryColumn(rs.getString("COLUMN_NAME"), rs.getString("TYPE_NAME")));
             }
         } catch (Exception e) {
-            log.error(e.getMessage(), e);
+            log.error(e.toString(), e);
         } finally {
             SourceUtils.closeResult(rs);
         }
@@ -662,12 +669,12 @@ public class SqlUtils {
      * @throws ServerException
      */
     public static void checkSensitiveSql(String sql) throws ServerException {
-        Matcher matcher = PATTERN_SENSITIVE_SQL.matcher(sql.toLowerCase());
-        if (matcher.find()) {
-            String group = matcher.group();
-            log.warn("Sensitive SQL operations are not allowed: {}", group.toUpperCase());
-            throw new ServerException("Sensitive SQL operations are not allowed: " + group.toUpperCase());
-        }
+//        Matcher matcher = PATTERN_SENSITIVE_SQL.matcher(sql.toLowerCase());
+//        if (matcher.find()) {
+//            String group = matcher.group();
+//            log.warn("Sensitive SQL operations are not allowed: {}", group.toUpperCase());
+//            throw new ServerException("Sensitive SQL operations are not allowed: " + group.toUpperCase());
+//        }
     }
 
     public JdbcTemplate jdbcTemplate() throws SourceException {
@@ -679,6 +686,7 @@ public class SqlUtils {
         }
         DataSource dataSource = sourceUtils.getDataSource(jdbcSourceInfo);
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        jdbcTemplate.setDatabaseProductName(jdbcSourceInfo.getDatabase());
         jdbcTemplate.setFetchSize(500);
         return jdbcTemplate;
     }
@@ -698,13 +706,13 @@ public class SqlUtils {
     public void executeBatch(String sql, Set<QueryColumn> headers, List<Map<String, Object>> datas) throws ServerException {
 
         if (StringUtils.isEmpty(sql)) {
-            log.info("execute batch sql is EMPTY");
-            throw new ServerException("execute batch sql is EMPTY");
+            log.error("Execute batch sql is empty");
+            throw new ServerException("Execute batch sql is empty");
         }
 
         if (CollectionUtils.isEmpty(datas)) {
-            log.info("execute batch data is EMPTY");
-            throw new ServerException("execute batch data is EMPTY");
+            log.error("Execute batch data is empty");
+            throw new ServerException("Execute batch data is empty");
         }
 
         Connection connection = null;
@@ -806,12 +814,12 @@ public class SqlUtils {
                 connection.commit();
             }
         } catch (Exception e) {
-            log.error(e.getMessage(), e);
+            log.error(e.toString(), e);
             if (null != connection) {
                 try {
                     connection.rollback();
                 } catch (SQLException se) {
-                    log.error(se.getMessage(), se);
+                    log.error(se.toString(), se);
                 }
             }
             throw new ServerException(e.getMessage(), e);
@@ -820,7 +828,7 @@ public class SqlUtils {
                 try {
                     pstmt.close();
                 } catch (SQLException e) {
-                    log.error(e.getMessage(), e);
+                    log.error(e.toString(), e);
                     throw new ServerException(e.getMessage(), e);
                 }
             }
@@ -884,6 +892,20 @@ public class SqlUtils {
         return StringUtils.isEmpty(aliasSuffix) ? EMPTY : aliasSuffix;
     }
 
+    public static String getSqlTempDelimiter(List<Dict> properties) {
+
+        if (CollectionUtils.isEmpty(properties)) {
+            return sqlTempDelimiter;
+        }
+
+        Optional<Dict> optional = properties.stream().filter(d -> d.getKey().equalsIgnoreCase("davinci.sql-template" +
+                "-delimiter")).findFirst();
+        if (optional.isPresent()) {
+            return optional.get().getValue();
+        }
+
+        return sqlTempDelimiter;
+    }
 
     /**
      * 过滤sql中的注释
@@ -892,7 +914,7 @@ public class SqlUtils {
      * @return
      */
     public static String filterAnnotate(String sql) {
-        sql = PATTERN_SQL_ANNOTATE.matcher(sql).replaceAll("$1");
+        // sql = PATTERN_SQL_ANNOTATE.matcher(sql).replaceAll("$1");
         sql = sql.replaceAll(NEW_LINE_CHAR, SPACE).replaceAll("(;+\\s*)+", SEMICOLON);
         return sql;
     }
@@ -957,6 +979,8 @@ public class SqlUtils {
         private JdbcDataSource jdbcDataSource;
         private int resultLimit;
         private boolean isQueryLogEnable;
+        private String name;
+        private String type;
         private String jdbcUrl;
         private String username;
         private String password;
@@ -984,6 +1008,16 @@ public class SqlUtils {
 
         SqlUtilsBuilder withIsQueryLogEnable(boolean isQueryLogEnable) {
             this.isQueryLogEnable = isQueryLogEnable;
+            return this;
+        }
+
+        SqlUtilsBuilder withName(String name) {
+            this.name = name;
+            return this;
+        }
+
+        SqlUtilsBuilder withType(String type) {
+            this.type = type;
             return this;
         }
 
@@ -1024,6 +1058,8 @@ public class SqlUtils {
             JdbcSourceInfo jdbcSourceInfo = JdbcSourceInfo
                     .JdbcSourceInfoBuilder
                     .aJdbcSourceInfo()
+                    .withName(this.name)
+                    .withType(this.type)
                     .withJdbcUrl(this.jdbcUrl)
                     .withUsername(this.username)
                     .withPassword(this.password)

@@ -211,7 +211,7 @@ public class ScreenshotUtil {
 
     private WebDriver generateChromeDriver() throws ExecutionException {
         if (!StringUtils.isEmpty(REMOTE_WEBDRIVER_URL)) {
-            scheduleLogger.info("user RemoteWebDriver ({})", REMOTE_WEBDRIVER_URL);
+            scheduleLogger.info("User remoteWebDriver:{}", REMOTE_WEBDRIVER_URL);
             try {
                 return new RemoteWebDriver(new URL(REMOTE_WEBDRIVER_URL), DesiredCapabilities.chrome());
             } catch (MalformedURLException ex) {
@@ -231,13 +231,13 @@ public class ScreenshotUtil {
         options.addArguments("headless");
         options.addArguments("no-sandbox");
         options.addArguments("disable-gpu");
-        options.addArguments("disable-gpu");
         options.addArguments("disable-features=NetworkService");
         options.addArguments("ignore-certificate-errors");
-        options.addArguments("silent");
+        options.addArguments("silent-launch");
         options.addArguments("disable-application-cache");
         options.addArguments("disable-web-security");
         options.addArguments("no-proxy-server");
+        options.addArguments("disable-dev-shm-usage");
 
         return new ChromeDriver(options);
     }

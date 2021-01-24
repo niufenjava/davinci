@@ -20,8 +20,7 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <java.version>1.8</java.version>
         <skipTests>true</skipTests>
-        <lucene.version>6.4.2</lucene.version>
-        <elasticsearch.version>5.1.2</elasticsearch.version>
+        <elasticsearch.version>7.6.1</elasticsearch.version>
         <graalvm.version>20.0.0</graalvm.version>
     </properties>
 
@@ -159,12 +158,12 @@
         <dependency>
             <groupId>mysql</groupId>
             <artifactId>mysql-connector-java</artifactId>
-            <version>5.1.44</version>
+            <version>8.0.22</version>
         </dependency>
         <dependency>
             <groupId>com.alibaba</groupId>
             <artifactId>druid</artifactId>
-            <version>1.1.11</version>
+            <version>1.2.3</version>
             <exclusions>
                 <exclusion>
                     <groupId>com.alibaba</groupId>
@@ -194,11 +193,6 @@
             <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>com.github.ben-manes.caffeine</groupId>
-            <artifactId>caffeine</artifactId>
-        </dependency>
-
 		<dependency>
 			<groupId>com.alibaba</groupId>
 			<artifactId>fastjson</artifactId>
@@ -216,30 +210,9 @@
 		</dependency>
 
         <dependency>
-            <groupId>org.apache.poi</groupId>
-            <artifactId>poi</artifactId>
-            <version>3.9</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.poi</groupId>
-            <artifactId>poi-ooxml</artifactId>
-            <version>3.9</version>
-        </dependency>
-
-        <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
             <version>4.5.7</version>
-        </dependency>
-
-        <!-- elasticsearch -->
-        <dependency>
-            <groupId>org.nlpcn</groupId>
-            <artifactId>elasticsearch-sql</artifactId>
-            <version>5.1.2.0</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/lib/davinci-elasticsearch-sql-5.1.2.jar</systemPath>
         </dependency>
 
         <dependency>
@@ -257,6 +230,7 @@
                 </exclusion>
             </exclusions>
         </dependency>
+
         <dependency>
             <groupId>org.elasticsearch</groupId>
             <artifactId>elasticsearch</artifactId>
@@ -424,6 +398,12 @@
             <scope>runtime</scope>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>4.1.2</version>
+        </dependency>
+
         <!--oracle -->
 		<!--<dependency> -->
 		<!--<groupId>com.oracle</groupId> -->
@@ -486,7 +466,21 @@
 		<!--<artifactId>kylin-jdbc</artifactId> -->
 		<!--<version>2.3.0</version> -->
 		<!--</dependency> -->
-		
+
+        <!--TDengine -->
+        <!--<dependency> -->
+        <!--<groupId>com.taosdata.jdbc</groupId> -->
+        <!--<artifactId>taos-jdbcdriver</artifactId> -->
+        <!--<version>1.0.3</version> -->
+        <!--</dependency> -->
+
+        <!--elasticsearch -->
+        <!--<dependency> -->
+        <!--<groupId>com.amazon.opendistroforelasticsearch.client</groupId> -->
+        <!--<artifactId>opendistro-sql-jdbc</artifactId> -->
+        <!--<version>1.7.0.0</version> -->
+        <!--</dependency> -->
+
 	</dependencies>
 
 	<build>

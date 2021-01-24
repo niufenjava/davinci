@@ -32,7 +32,7 @@ import edp.davinci.dto.viewDto.DownloadViewExecuteParam;
 import edp.davinci.model.ShareDownloadRecord;
 import edp.davinci.service.ShareDownloadService;
 import edp.davinci.service.ShareService;
-import edp.davinci.service.excel.ExecutorUtil;
+import edp.davinci.service.excel.ExecutorUtils;
 import edp.davinci.service.excel.MsgWrapper;
 import edp.davinci.service.excel.WidgetContext;
 import edp.davinci.service.excel.WorkBookContext;
@@ -69,20 +69,20 @@ public class ShareDownloadServiceImpl extends DownloadCommonService implements S
             shareDownloadRecordMapper.insertSelective(record);
 
             MsgWrapper wrapper = new MsgWrapper(record, ActionEnum.SHAREDOWNLOAD, uuid);
-            WorkBookContext workBookContext = WorkBookContext.WorkBookContextBuilder.newBuildder()
+            WorkBookContext workBookContext = WorkBookContext.WorkBookContextBuilder.newBuilder()
                     .withWrapper(wrapper)
                     .withWidgets(widgetList)
                     .withUser(shareFactor.getUser())
                     .withResultLimit(resultLimit)
                     .withTaskKey("ShareDownload_" + uuid)
                     .build();
-            ExecutorUtil.submitWorkbookTask(workBookContext, null);
-            log.info("Share download task submit: {}", wrapper);
+            ExecutorUtils.submitWorkbookTask(workBookContext, null);
+            log.info("Share download task submit:{}", wrapper);
             return true;
         } catch (UnAuthorizedException | ServerException e) {
             throw e;
         } catch (Exception e) {
-            log.error("submit download task error,e=", e);
+            log.error("Submit download task error", e);
             return false;
         }
     }

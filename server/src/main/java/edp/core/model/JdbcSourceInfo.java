@@ -25,7 +25,11 @@ import java.util.List;
 
 @Getter
 public class JdbcSourceInfo {
-    
+
+    private String name;
+
+    private String type;
+
 	private String jdbcUrl;
 
     private String username;
@@ -40,7 +44,8 @@ public class JdbcSourceInfo {
 
     private boolean ext;
 
-    private JdbcSourceInfo(String jdbcUrl, String username, String password, String database, String dbVersion, List<Dict> properties, boolean ext) {
+    private JdbcSourceInfo(String name, String type, String jdbcUrl, String username, String password, String database, String dbVersion, List<Dict> properties, boolean ext) {
+        this.name = name;
         this.jdbcUrl = jdbcUrl;
         this.username = username;
         this.password = password;
@@ -52,6 +57,8 @@ public class JdbcSourceInfo {
 
 
     public static final class JdbcSourceInfoBuilder {
+        private String name;
+        private String type;
         private String jdbcUrl;
         private String username;
         private String password;
@@ -65,6 +72,16 @@ public class JdbcSourceInfo {
 
         public static JdbcSourceInfoBuilder aJdbcSourceInfo() {
             return new JdbcSourceInfoBuilder();
+        }
+
+        public JdbcSourceInfoBuilder withName(String name) {
+            this.name = name;
+            return this;
+        }
+
+        public JdbcSourceInfoBuilder withType(String type) {
+            this.type = type;
+            return this;
         }
 
         public JdbcSourceInfoBuilder withJdbcUrl(String jdbcUrl) {
@@ -103,7 +120,7 @@ public class JdbcSourceInfo {
         }
 
         public JdbcSourceInfo build() {
-            return new JdbcSourceInfo(jdbcUrl, username, password, database, dbVersion, properties, ext);
+            return new JdbcSourceInfo(name, type, jdbcUrl, username, password, database, dbVersion, properties, ext);
         }
     }
 }

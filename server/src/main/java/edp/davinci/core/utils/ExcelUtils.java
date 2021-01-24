@@ -81,7 +81,7 @@ public class ExcelUtils {
 
             //前两行表示列名和类型
             if (sheet.getLastRowNum() < 1) {
-                throw new ServerException("EMPTY excel");
+                throw new ServerException("Empty excel");
             }
             //列
             Row headerRow = sheet.getRow(0);
@@ -94,7 +94,6 @@ public class ExcelUtils {
                     headers.add(new QueryColumn(headerRow.getCell(i).getStringCellValue(),
                             SqlUtils.formatSqlType(typeRow.getCell(i).getStringCellValue())));
                 } catch (Exception e) {
-                    e.printStackTrace();
                     if (e instanceof NullPointerException) {
                         throw new ServerException("Unknown Type");
                     }
@@ -118,7 +117,6 @@ public class ExcelUtils {
             dataUploadEntity.setValues(values);
 
         } catch (ServerException e) {
-            e.printStackTrace();
             throw new ServerException(e.getMessage());
         }
 
@@ -138,7 +136,6 @@ public class ExcelUtils {
                 throw new ServerException("Invalid excel file");
             }
         } catch (IOException e) {
-            e.printStackTrace();
             throw new ServerException(e.getMessage());
         } finally {
             FileUtils.closeCloseable(inputStream);
@@ -147,12 +144,15 @@ public class ExcelUtils {
 
 
     /**
+     *
      * 写入数据到excel sheet页
      *
      * @param sheet
      * @param columns
      * @param dataList
      * @param workbook
+     * @param containType
+     * @param widgetConfig
      * @param params
      */
     public static void writeSheet(Sheet sheet,
@@ -160,7 +160,7 @@ public class ExcelUtils {
                                   List<Map<String, Object>> dataList,
                                   SXSSFWorkbook workbook,
                                   boolean containType,
-                                  String json,
+                                  String widgetConfig,
                                   List<Param> params) {
 
 
@@ -180,19 +180,19 @@ public class ExcelUtils {
         //表头粗体居中
         Font font = workbook.createFont();
         font.setFontName("黑体");
-        font.setBoldweight(Font.BOLDWEIGHT_BOLD);
+        font.setBold(true);
         headerCellStyle.setFont(font);
         headerCellStyle.setDataFormat(format.getFormat("@"));
-        headerCellStyle.setAlignment(CellStyle.ALIGN_CENTER);
-        headerCellStyle.setVerticalAlignment(CellStyle.VERTICAL_CENTER);
+        headerCellStyle.setAlignment(HorizontalAlignment.CENTER);
+        headerCellStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
-        boolean isTable = isTable(json);
+        boolean isTable = isTable(widgetConfig);
 
         ScriptEngine engine = null;
         List<ExcelHeader> excelHeaders = null;
         if (isTable) {
             try {
-                excelHeaders = formatHeader(json, params);
+                excelHeaders = formatHeader(widgetConfig, params);
             } catch (Exception e) {
                 e.printStackTrace();
             }

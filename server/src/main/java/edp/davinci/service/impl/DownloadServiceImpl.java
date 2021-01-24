@@ -31,7 +31,7 @@ import edp.davinci.dto.viewDto.DownloadViewExecuteParam;
 import edp.davinci.model.DownloadRecord;
 import edp.davinci.model.User;
 import edp.davinci.service.DownloadService;
-import edp.davinci.service.excel.ExecutorUtil;
+import edp.davinci.service.excel.ExecutorUtils;
 import edp.davinci.service.excel.MsgWrapper;
 import edp.davinci.service.excel.WidgetContext;
 import edp.davinci.service.excel.WorkBookContext;
@@ -109,7 +109,7 @@ public class DownloadServiceImpl extends DownloadCommonService implements Downlo
             downloadRecordMapper.insert(record);
             MsgWrapper wrapper = new MsgWrapper(record, ActionEnum.DOWNLOAD, record.getId());
 
-            WorkBookContext workBookContext = WorkBookContext.WorkBookContextBuilder.newBuildder()
+            WorkBookContext workBookContext = WorkBookContext.WorkBookContextBuilder.newBuilder()
                     .withWrapper(wrapper)
                     .withWidgets(widgetList)
                     .withUser(user)
@@ -118,7 +118,7 @@ public class DownloadServiceImpl extends DownloadCommonService implements Downlo
                     .withCustomLogger(downloadLogger)
                     .build();
 
-            ExecutorUtil.submitWorkbookTask(workBookContext, downloadLogger);
+            ExecutorUtils.submitWorkbookTask(workBookContext, downloadLogger);
             log.info("Download task submit:{}", wrapper);
         } catch (Exception e) {
             log.error("Submit download task error", e);

@@ -32,6 +32,7 @@ import edp.core.utils.TokenUtils;
 import edp.davinci.core.common.Constants;
 import edp.davinci.core.common.ErrorMsg;
 import edp.davinci.core.model.TokenEntity;
+import edp.davinci.core.utils.VizUtils;
 import edp.davinci.dao.*;
 import edp.davinci.dto.displayDto.MemDisplaySlideWidgetWithSlide;
 import edp.davinci.dto.projectDto.ProjectDetail;
@@ -116,7 +117,7 @@ public class ShareServiceImpl implements ShareService {
         ShareFactor shareFactor = ShareAuthAspect.SHARE_FACTOR_THREAD_LOCAL.get();
         User loginUser = userService.userLogin(userLogin);
         if (null == loginUser) {
-            throw new NotFoundException("user is not found");
+            throw new NotFoundException("User is not found");
         }
 
         if (!shareFactor.getViewers().contains(loginUser.getId())) {
@@ -128,7 +129,7 @@ public class ShareServiceImpl implements ShareService {
 
         //是否激活
         if (!loginUser.getActive()) {
-            throw new ServerException("this user is not active");
+            throw new ServerException("This user is not active");
         }
         return loginUser;
     }
@@ -161,7 +162,7 @@ public class ShareServiceImpl implements ShareService {
         Set<SimpleView> simpleViews = new HashSet<>();
         Map<String, Object> widgetConfigMap = JSON.parseObject(simpleShareWidget.getConfig(), Map.class);
         if (!CollectionUtils.isEmpty(widgetConfigMap)) {
-            setControllerViews(simpleViews, (List<Map<String, Object>>)widgetConfigMap.get("controls"));
+            simpleViews.addAll(VizUtils.getControllerViews((List<Map<String, Object>>) widgetConfigMap.get("controls")));
         }
 
         simpleViews.add(viewMapper.getSimpleViewById(simpleShareWidget.getViewId()));
@@ -221,7 +222,7 @@ public class ShareServiceImpl implements ShareService {
             widgetFactor.freshWidgetDataToken(w, TOKEN_SECRET);
             Map<String, Object> widgetConfigMap = JSON.parseObject(widgetMapper.getShareWidgetById(w.getId()).getConfig(), Map.class);
             if (!CollectionUtils.isEmpty(widgetConfigMap)) {
-                setControllerViews(simpleViews, (List<Map<String, Object>>) widgetConfigMap.get("controls"));
+                simpleViews.addAll(VizUtils.getControllerViews((List<Map<String, Object>>) widgetConfigMap.get("controls")));
             }
         });
         shareDisplay.setWidgets(widgets);
@@ -265,28 +266,20 @@ public class ShareServiceImpl implements ShareService {
         // global controller views
         Map<String, Object> dashboardConfig = JSON.parseObject(dashboard.getConfig(), Map.class);
         if (!CollectionUtils.isEmpty(dashboardConfig)) {
-            setControllerViews(simpleViews, (List<Map<String, Object>>) dashboardConfig.get("filters"));
+            simpleViews.addAll(VizUtils.getControllerViews((List<Map<String, Object>>) dashboardConfig.get("filters")));
         }
 
         // widget controller views
         memDashboardWidgets.forEach(mw -> {
             Map<String, Object> widgetConfigMap = JSON.parseObject(widgetMapper.getShareWidgetById(mw.getWidgetId()).getConfig(), Map.class);
             if (!CollectionUtils.isEmpty(widgetConfigMap)) {
-                setControllerViews(simpleViews, (List<Map<String, Object>>)widgetConfigMap.get("controls"));
+                simpleViews.addAll(VizUtils.getControllerViews((List<Map<String, Object>>)widgetConfigMap.get("controls")));
             }
         });
 
         shareDashboard.setViews(generateShareViews(simpleViews, viewFactor));
 
         return shareDashboard;
-    }
-
-    private void setControllerViews(Set<SimpleView> simpleViews, List<Map<String, Object>> list) {
-        if (!CollectionUtils.isEmpty(list)) {
-            list.stream().filter(m -> m.containsKey("valueViewId")).collect(Collectors.toList()).forEach(m -> {
-                simpleViews.add(viewMapper.getSimpleViewById(Long.parseLong(String.valueOf(m.get("valueViewId")))));
-            });
-        }
     }
 
     private Set<ShareView> generateShareViews(Set<SimpleView> simpleViews, ShareFactor viewFactor) {
@@ -558,7 +551,7 @@ public class ShareServiceImpl implements ShareService {
         if (!StringUtils.isEmpty(username)) {
             User shareUser = userMapper.selectByUsername(username);
             if (null == shareUser) {
-                throw new ServerException("user : \"" + username + "\" not found");
+                throw new ServerException("User : \"" + username + "\" not found");
             }
             tokenUserName += Constants.SPLIT_CHAR_STRING + username;
             tokenPassword += (Constants.SPLIT_CHAR_STRING + shareUser.getId());
